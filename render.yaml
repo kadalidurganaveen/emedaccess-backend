@@ -2,11 +2,12 @@ services:
   - type: web
     name: emedaccess-backend
     env: docker
-    buildCommand: docker build -t emedaccess-backend .
+    buildCommand: |
+      docker build -t emedaccess-backend .
     startCommand: docker run -p $PORT:80 emedaccess-backend
     envVars:
       - key: APP_KEY
-        value: base64:21hsKnPaQF4f/zYbK+vghMSBF2KF/Vxgq//qUZbakrk=
+        generateValue: true
       - key: DB_CONNECTION
         value: mysql
       - key: DB_HOST
@@ -25,3 +26,5 @@ services:
         value: false
       - key: APP_URL
         value: https://emedaccess-backend.onrender.com
+    healthCheckPath: /api/health
+    autoDeploy: true

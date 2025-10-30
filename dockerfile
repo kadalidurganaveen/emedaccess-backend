@@ -43,13 +43,22 @@ RUN chown -R www-data:www-data /var/www \
 # Install Node.js dependencies and build assets
 RUN npm install && npm run build
 
-# Generate application key
-RUN php artisan key:generate
+# Copy .env.example to .env
+COPY .env.example .env
 
-# Optimize Laravel
-RUN php artisan config:cache \
-    && php artisan route:cache \
-    && php artisan view:cache
+# Install dependencies and optimize
+RUN composer install --no-interaction --no-dev --optimize-autoloader
+
+# Set directory permissions
+RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
+
+# Generate key and optimize Laravel (only if .env exists)
+RUN if [ -f .env ]; then \
+        php artisan key:generate --force; \
+        php artisan config:cache; \
+        php artisan route:cache; \
+        php artisan view:cache; \
+    fi
 
 # Expose port 80
 EXPOSE 80

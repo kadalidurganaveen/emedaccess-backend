@@ -9,6 +9,10 @@ use App\Http\Controllers\API\BlogController;
 use App\Http\Controllers\API\TeamMemberController;
 use App\Http\Controllers\API\SpecialtyController;
 
+Route::get('/health', function () {
+    return response()->json(['status' => 'healthy', 'timestamp' => now()]);
+});
+
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
