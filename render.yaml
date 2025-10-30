@@ -26,5 +26,9 @@ services:
         value: false
       - key: APP_URL
         value: https://emedaccess-backend-2.onrender.com
+        - key: SESSION_DRIVER
+          value: file
+        - key: CACHE_DRIVER
+          value: file
     healthCheckPath: /api/health
     autoDeploy: true

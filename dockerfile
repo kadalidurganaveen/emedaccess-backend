@@ -39,6 +39,11 @@ RUN a2enmod rewrite
 # Set permissions
 RUN chown -R www-data:www-data /var/www \
     && chmod -R 755 /var/www/storage
+RUN mkdir -p /var/www/storage/framework/sessions \
+    && mkdir -p /var/www/storage/framework/views \
+    && mkdir -p /var/www/storage/framework/cache \
+    && chown -R www-data:www-data /var/www/storage/framework \
+    && chmod -R 755 /var/www/storage/framework
 
 # Install Node.js dependencies and build assets
 RUN npm install && npm run build
