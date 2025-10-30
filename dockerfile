@@ -1,36 +1,58 @@
-# Stage 1 - Build Frontend (Vite)
-FROM node:18 AS frontend
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
-
-# Stage 2 - Backend (Laravel + PHP + Composer)
-FROM php:8.2-fpm AS backend
+FROM php:8.2-apache
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    git curl unzip libpq-dev libonig-dev libzip-dev zip \
-    && docker-php-ext-install pdo pdo_mysql mbstring zip
+    git \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    nodejs \
+    npm
 
-# Install Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+# Clear cache
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Install PHP extensions
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+
+# Get latest Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Set working directory
 WORKDIR /var/www
 
-# Copy app files
-COPY . .
+# Copy application files
+COPY . /var/www/
 
-# Copy built frontend from Stage 1
-COPY --from=frontend /app/public/dist ./public/dist
-
-# Install PHP dependencies
+# Install dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Laravel setup
-RUN php artisan config:clear && \
-    php artisan route:clear && \
-    php artisan view:clear
+# Copy Apache configuration
+COPY docker/apache/000-default.conf /etc/apache2/sites-available/000-default.conf
 
-CMD ["php-fpm"]
+# Enable Apache modules
+RUN a2enmod rewrite
+
+# Set permissions
+RUN chown -R www-data:www-data /var/www \
+    && chmod -R 755 /var/www/storage
+
+# Install Node.js dependencies and build assets
+RUN npm install && npm run build
+
+# Generate application key
+RUN php artisan key:generate
+
+# Optimize Laravel
+RUN php artisan config:cache \
+    && php artisan route:cache \
+    && php artisan view:cache
+
+# Expose port 80
+EXPOSE 80
+
+# Start Apache
+CMD ["apache2-foreground"]
