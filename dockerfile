@@ -15,20 +15,53 @@ RUN apt-get update && apt-get install -y \
 # Clear cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install PHP extensions
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+### Multi-stage Dockerfile: build frontend with Node, then build PHP image
 
-# Get latest Composer
+# Stage 1: build frontend assets with Node
+FROM node:18 AS frontend
+WORKDIR /app
+
+# Copy package files and install frontend deps (use npm ci if lockfile exists)
+COPY package.json package-lock.json* ./
+RUN npm ci --silent || npm install --silent
+
+# Copy frontend sources (resources and vite config) and build
+COPY resources resources
+COPY vite.config.js .
+COPY public public
+RUN npm run build --if-present
+
+# Stage 2: PHP + Apache
+FROM php:8.2-apache
+
+# Install system packages required for PHP extensions and basic utilities
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    git \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install PHP extensions required by Laravel
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd || true
+
+# Copy Composer from official image
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Set working directory
 WORKDIR /var/www
 
-# Copy application files
+# Copy composer files and install PHP dependencies
+COPY composer.json composer.lock* ./
+RUN composer install --no-dev --no-interaction --optimize-autoloader --no-scripts
+
+# Copy application code
 COPY . /var/www/
 
-# Install dependencies
-RUN composer install --no-dev --optimize-autoloader
+# Copy built frontend assets from the frontend stage if present
+COPY --from=frontend /app/public/build /var/www/public/build
 
 # Copy Apache configuration
 COPY docker/apache/000-default.conf /etc/apache2/sites-available/000-default.conf
@@ -36,33 +69,19 @@ COPY docker/apache/000-default.conf /etc/apache2/sites-available/000-default.con
 # Enable Apache modules
 RUN a2enmod rewrite
 
-# Set permissions
-RUN chown -R www-data:www-data /var/www \
-    && chmod -R 755 /var/www/storage
-RUN mkdir -p /var/www/storage/framework/sessions \
-    && mkdir -p /var/www/storage/framework/views \
-    && mkdir -p /var/www/storage/framework/cache \
-    && chown -R www-data:www-data /var/www/storage/framework \
-    && chmod -R 755 /var/www/storage/framework
+# Create storage directories and set permissions
+RUN mkdir -p /var/www/storage/framework/{sessions,views,cache} \
+    && chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache || true \
+    && chmod -R 755 /var/www/storage || true
 
-# Install Node.js dependencies and build assets
-RUN npm install && npm run build
-
-
-
-# Install dependencies and optimize
-RUN composer install --no-interaction --no-dev --optimize-autoloader
-
-# Set directory permissions
-RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache || true
-
-# Copy entrypoint script and make executable. The entrypoint clears cached config at runtime
+# Copy entrypoint and make executable
 COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Expose port 80
+# Ensure composer post-install scripts run (package discovery)
+RUN composer run-script post-autoload-dump --no-dev --no-interaction || true
+
 EXPOSE 80
 
-# Use entrypoint to clear config at runtime and then start Apache
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["apache2-foreground"]
