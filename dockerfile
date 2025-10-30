@@ -48,8 +48,7 @@ RUN mkdir -p /var/www/storage/framework/sessions \
 # Install Node.js dependencies and build assets
 RUN npm install && npm run build
 
-# Copy .env.example to .env
-COPY .env.example .env
+
 
 # Install dependencies and optimize
 RUN composer install --no-interaction --no-dev --optimize-autoloader
