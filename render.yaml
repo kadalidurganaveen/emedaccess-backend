@@ -25,6 +25,6 @@ services:
       - key: APP_DEBUG
         value: false
       - key: APP_URL
-        value: https://emedaccess-backend.onrender.com
+        value: https://emedaccess-backend-2.onrender.com
     healthCheckPath: /api/health
     autoDeploy: true
